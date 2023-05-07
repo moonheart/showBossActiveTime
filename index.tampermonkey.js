@@ -90,10 +90,38 @@
         }
       );
     }
+    getHumanTime(time){
+      const updatedTime = new Date(time);
+      const now = new Date();
+      const diff = now - updatedTime;
+      const seconds = Math.floor(diff / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      const days = Math.floor(hours / 24);
+
+      if (diff === 0){
+        return ''
+      }
+
+      let result;
+      if (days > 0) {
+        result = `${days}天前`;
+      } else if (hours > 0) {
+        result = `${hours}小时前`;
+      } else if (minutes > 0) {
+        result = `${minutes}分钟前`;
+      } else {
+        result = `${seconds}秒前`;
+      }
+
+      return result + '更新';
+    }
     // 设置文本内容
-    setText(node, text, status) {
+    setText(node, text, status, time) {
+      time = this.getHumanTime(time)
       const html = `
         <div class="show-active-status">
+          <p class="time">${time}</p>&nbsp;&nbsp;&nbsp;&nbsp;
           <p class="status">${text}</p>&nbsp;&nbsp;&nbsp;&nbsp;
           <p class="chat">${status}</p>
         </div>
@@ -145,11 +173,11 @@
               if (/security-check.html/.test(response.finalUrl)) {
                 //    用GM_xmlhttpRequest获取触发了302，用finaleUrl通过iframe来获取，不用link,看是否能省略302这个步骤,加快速度
                 this.getStatusByIframe(response.finalUrl, index).then(
-                  (text) => {
+                  (text, time) => {
                     if (text === '') {
                       text = '未知状态';
                     }
-                    this.setText(node, text, chat);
+                    this.setText(node, text, chat, time);
                     this.toggleDom(node);
                   }
                 );
@@ -158,7 +186,8 @@
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(html, 'text/html');
                 const text = this.getStatusText(doc);
-                this.setText(node, text, chat);
+                const time = this.getUpdateTime(doc)
+                this.setText(node, text, chat, time);
                 this.toggleDom(node);
               }
             }
@@ -175,16 +204,17 @@
               const doc = document.createElement('div');
               doc.insertAdjacentHTML('afterbegin', data);
               const text = this.getStatusText(doc);
-              this.setText(node, text, chat);
+              const time = this.getUpdateTime(doc)
+              this.setText(node, text, chat, time);
               this.toggleDom(node);
             })
             .catch(async (error) => {
               /*请求被302临时重定向了，无法获取到数据，需要用iframe来获取了*/
-              this.getStatusByIframe(link, index).then((text) => {
+              this.getStatusByIframe(link, index).then((text, time) => {
                 if (text === '') {
                   text = '未知状态';
                 }
-                this.setText(node, text, chat);
+                this.setText(node, text, chat, time);
                 this.toggleDom(node);
               });
             });
@@ -206,7 +236,10 @@
               const text = this.getStatusText(
                 tempIframe.contentWindow.document
               );
-              resolve(text);
+              const time = this.getUpdateTime(
+                  tempIframe.contentWindow.document
+              )
+              resolve(text, time);
               console.log('用iframe获取', text);
               setTimeout(() => {
                 document.body.removeChild(tempIframe);
@@ -287,6 +320,10 @@
           : '获取到数据了，但不知道是什么数据';
         return status;
       }
+    }
+    getUpdateTime(doc){
+      const metaTag = doc.querySelector('meta[property="bytedance:updated_time"]');
+      return metaTag.getAttribute('content')
     }
     toggleDom(node){
       const status = node.querySelector('.status')?.textContent;
